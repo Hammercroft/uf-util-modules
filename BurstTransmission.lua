@@ -57,7 +57,7 @@ export type BurstTransmitter = {
 	target : UnreliableRemoteEvent,
 	activeBursts : {[number]:boolean},
 	options : BurstTransmitterOptions,
-	transmit : (self : BurstTransmitter, ...any) -> (),
+	transmit : (self : BurstTransmitter, targetPlayer:Player?, ...any) -> (number),
 	stopTransmission : (self : BurstTransmitter, burstId:number) -> (),
 	precalculated : {
 		duration : number,
@@ -75,9 +75,12 @@ export type BurstTransmitter = {
 }
 
 -- Sends a burst transmission to a configured UnreliableRemoteEvent target.
+-- @param targetPlayer a target player to send the transmission to. This argument is ignored when invoked in the client side.
 -- @param ... A tuple of data to be transmitted
-local function func_transmit(self : BurstTransmitter, ...)
+-- @return the numeric burst ID that was used for the transmission
+local function func_transmit(self : BurstTransmitter, targetPlayer:Player?, ...) : number
 	local data = {...}
+	local id = randomInt32()   -- Unique identifier for this burst
 	task.defer(@native function()
 		local cache = self.precalculated
 
@@ -90,18 +93,30 @@ local function func_transmit(self : BurstTransmitter, ...)
 		local fireRateEaseEndTime = fireRateEaseStartTime + cache.easeDuration
 
 		local burstPacketIndex = 1 -- Counter for the sequential packet index
-		local id = randomInt32()   -- Unique identifier for this burst
 		local currentTime = tick()
 		local currentInterval = cache.startingInterval
 
 		self.activeBursts[id] = true
 		while tick() < burstEndTime and self.activeBursts[id] do
 			-- Fire the shot to the server with burst ID, packet index, and data payload
-			self.target:FireServer(
-				id,                 -- Unique identifier for this burst instance
-				burstPacketIndex,   -- Sequential index of this packet within the burst
-				table.unpack(data)  -- The payload data to be sent
-			)
+			if game:GetService("RunService"):IsServer() then
+				if targetPlayer then
+					self.target:FireClient(
+						targetPlayer,
+						id,					-- Unique identifier for this burst instance
+						burstPacketIndex,   -- Sequential index of this packet within the burst
+						table.unpack(data)  -- The payload data to be sent
+					)
+				else
+					error("Target player is required when transmitting bursts from the server.")
+				end
+			else
+				self.target:FireServer(
+					id,                 -- Unique identifier for this burst instance
+					burstPacketIndex,   -- Sequential index of this packet within the burst
+					table.unpack(data)  -- The payload data to be sent
+				)
+			end
 			burstPacketIndex = burstPacketIndex + 1 -- Increment packet index for the next shot
 
 			-- calculate wait time based on current phase
@@ -121,7 +136,8 @@ local function func_transmit(self : BurstTransmitter, ...)
 		if self.activeBursts[id] then
 			self.activeBursts[id] = nil
 		end
-	end)			
+	end)		
+	return id	
 end
 
 -- Stops a transmission burst with the given burstId.
@@ -199,7 +215,7 @@ export type BurstReceiver = {
 	ignoredIds : {number},
 	ignoredIdsTableSize : number,
 	sourceConnection : RBXScriptConnection,
-	dataHandlingCallback : (...any)->(),
+	dataHandlingCallback : ((...any)->())|nil,
 	close : (self:BurstReceiver)->(),
 }
 
@@ -218,12 +234,85 @@ local function func_close(self:BurstReceiver)
 	self = nil :: any
 end
 
+local function setupServerReceiver(brTable : BurstReceiver, includeBurstTransportInfoAlongData)
+	if includeBurstTransportInfoAlongData then
+		brTable.sourceConnection = brTable.source.OnServerEvent:Connect(function(player: Player, id: number, seq: number, ...)
+			local data = {...}
+			task.defer(function()
+				if table.find(brTable.ignoredIds, id) then return end
+				table.insert(brTable.ignoredIds, id)
+
+				if brTable.dataHandlingCallback then
+					brTable.dataHandlingCallback(id, seq, player, table.unpack(data))
+				end
+
+				if #brTable.ignoredIds > brTable.ignoredIdsTableSize then
+					table.remove(brTable.ignoredIds, 1)
+				end
+			end)
+		end)
+	else
+		brTable.sourceConnection = brTable.source.OnServerEvent:Connect(function(player: Player, id: number, seq: number, ...)
+			local data = {...}
+			task.defer(function()
+				if table.find(brTable.ignoredIds, id) then return end
+				table.insert(brTable.ignoredIds, id)
+
+				if brTable.dataHandlingCallback then
+					brTable.dataHandlingCallback(player, table.unpack(data))
+				end
+
+				if #brTable.ignoredIds > brTable.ignoredIdsTableSize then
+					table.remove(brTable.ignoredIds, 1)
+				end
+			end)
+		end)
+	end
+end
+
+local function setupClientReceiver(brTable : BurstReceiver, includeBurstTransportInfoAlongData)
+	if includeBurstTransportInfoAlongData then
+		brTable.sourceConnection = brTable.source.OnClientEvent:Connect(function(id: number, seq: number, ...)
+			local data = {...}
+			task.defer(function()
+				if table.find(brTable.ignoredIds, id) then return end
+				table.insert(brTable.ignoredIds, id)
+
+				if brTable.dataHandlingCallback then
+					brTable.dataHandlingCallback(id, seq, table.unpack(data))
+				end
+
+				if #brTable.ignoredIds > brTable.ignoredIdsTableSize then
+					table.remove(brTable.ignoredIds, 1)
+				end
+			end)
+		end)
+	else
+		brTable.sourceConnection = brTable.source.OnClientEvent:Connect(function(id: number, seq: number, ...)
+			local data = {...}
+			task.defer(function()
+				if table.find(brTable.ignoredIds, id) then return end
+				table.insert(brTable.ignoredIds, id)
+
+				if brTable.dataHandlingCallback then
+					brTable.dataHandlingCallback(table.unpack(data))
+				end
+
+				if #brTable.ignoredIds > brTable.ignoredIdsTableSize then
+					table.remove(brTable.ignoredIds, 1)
+				end
+			end)
+		end)
+	end
+end
+
 -- Constructs a new BurstReceiver object.
 -- @param source_unreliable_remote_event The UnreliableRemoteEvent to listen to for bursts.
--- @param data_handler A function that handles incoming burst data.
+-- @param data_handler? A function that handles incoming burst data. Can be nil.
 -- @param includeBurstTransportInfoAlongData? If true, the first value passed unto the data_handler will be the burst id, the second value will be the sequence number, and the rest will be the data. If false, only the data will be passed.
 -- @param ignoredIdsTableSize? The size of the table that holds burst ids to be ignored. If not provided, it will default to 64.
-function module.newBurstReceiver(source_unreliable_remote_event : UnreliableRemoteEvent, dataHandler : (...any)->(), includeBurstTransportInfoAlongData : boolean?, ignoredIdsTableSize: number?) : BurstReceiver
+-- @NOTE If constructed on the server, all incoming data tuples will include the player as the first value of the tuple.
+function module.newBurstReceiver(source_unreliable_remote_event : UnreliableRemoteEvent, dataHandler : ((...any)->())|nil, includeBurstTransportInfoAlongData : boolean?, ignoredIdsTableSize: number?) : BurstReceiver
 	local brTable : BurstReceiver = {
 		source = source_unreliable_remote_event,
 		ignoredIds = {},
@@ -233,36 +322,11 @@ function module.newBurstReceiver(source_unreliable_remote_event : UnreliableRemo
 		close = func_close,
 	}
 	
-	if includeBurstTransportInfoAlongData then
-		brTable.sourceConnection = brTable.source.OnServerEvent:Connect(function(player : Player, id : number, seq : number, ...)
-			local data = {...}
-			task.defer(@native function()
-				if table.find(brTable.ignoredIds, id) then return end
-				table.insert(brTable.ignoredIds, id)
-				-- facilitate callback
-				brTable.dataHandlingCallback(id,seq,table.unpack(data))
-				-- remove last element in ignoredIds table if it exceeds the maximum size
-				if #brTable.ignoredIds > brTable.ignoredIdsTableSize then
-					table.remove(brTable.ignoredIds, 1)
-				end
-			end)
-		end)
+	if game:GetService("RunService"):IsServer() then
+		setupServerReceiver(brTable, includeBurstTransportInfoAlongData)
 	else
-		brTable.sourceConnection = brTable.source.OnServerEvent:Connect(function(player : Player, id : number, seq : number, ...)
-			local data = {...}
-			task.defer(@native function()
-				if table.find(brTable.ignoredIds, id) then return end
-				table.insert(brTable.ignoredIds, id)
-				-- facilitate callback
-				brTable.dataHandlingCallback(table.unpack(data))
-				-- remove last element in ignoredIds table if it exceeds the maximum size
-				if #brTable.ignoredIds > brTable.ignoredIdsTableSize then
-					table.remove(brTable.ignoredIds, 1)
-				end
-			end)
-		end)
+		setupClientReceiver(brTable, includeBurstTransportInfoAlongData)
 	end
-	
 	return brTable
 end
 
