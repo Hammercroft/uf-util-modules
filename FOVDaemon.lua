@@ -80,22 +80,22 @@ if not baseFovNumberValue or baseFovNumberValue.Value == nil then
     baseFovNumberValue.Name = "BaseFov"
     baseFovNumberValue.Value = DEFAULT_43_HFOV
     baseFovNumberValue.Parent = script
-    end
-    assert(baseFovNumberValue)
+end
+assert(baseFovNumberValue)
     
-    -- Base FOV value & caching
-    local currentBaseHFOV = baseFovNumberValue.Value
-    function updateBaseFOV()
+-- Base FOV value & caching
+local currentBaseHFOV = baseFovNumberValue.Value
+function updateBaseFOV()
     currentBaseHFOV = baseFovNumberValue.Value
-    end
-    baseFovNumberValue:GetPropertyChangedSignal("Value"):Connect(updateBaseFOV)
+end
+baseFovNumberValue:GetPropertyChangedSignal("Value"):Connect(updateBaseFOV)
     
-    -- other fields
-    local appliedPreModifierFov = 0
+-- other fields
+local appliedPreModifierFov = 0
     
-    -- convert 4:3 hfov to vfov, degrees
-    @native
-    function convertHFovToVFov(viewport_size : Vector2, h_fov : number)
+-- convert 4:3 hfov to vfov, degrees
+@native
+function convertHFovToVFov(viewport_size : Vector2, h_fov : number)
     local currentAspectRatio = (viewport_size.X + 1e-8) / (viewport_size.Y + 1e-8)
     local baseAspectRatio = 1.33333337306976318359375
     local calcRatio = math.min(currentAspectRatio, baseAspectRatio)
@@ -105,22 +105,20 @@ if not baseFovNumberValue or baseFovNumberValue.Value == nil then
     local vFovRad = 2 * math.atan(math.tan((hFovRad + 1e-8) / 2) / calcRatio)
     
     return math.deg(vFovRad)
-    end
+end
     
-    repeat wait() until workspace.CurrentCamera ~= nil
-    assert(workspace.CurrentCamera)
-    local camera : Camera = workspace.CurrentCamera
+repeat wait() until workspace.CurrentCamera ~= nil
+assert(workspace.CurrentCamera)
+local camera : Camera = workspace.CurrentCamera
     
-    camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
     local viewport_size = camera.ViewportSize
     local vFov = convertHFovToVFov(viewport_size, currentBaseHFOV)
     appliedPreModifierFov = vFov 
-    end)
-    --updateCameraFOV()
+end)    
     
-    
-    local runSvc = game:GetService("RunService")
-    local function update()
+local runSvc = game:GetService("RunService")
+local function update()
     assert(camera)
     camera.FieldOfView = appliedPreModifierFov
     
