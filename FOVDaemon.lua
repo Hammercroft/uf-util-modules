@@ -2,16 +2,30 @@
 
 -- FOVDaemon (St0rmCast3r / Hammercroft)
 
--- !!! !!! NOTE: DROP IN StarterPlayerScripts !!! !!!
+-- !!! !!! !!! NOTE: DROP IN StarterPlayerScripts !!! !!! !!!
 
 --[[
-    Purpose:
+    ( PURPOSE )
     -> Allow the base field of view to be set via a number value instance
     -> For converting 4:3 HFOV values to Roblox's VFOV
     -> For applying dynamic FOV modifiers via number value instances
+    -> Do all of these without critical dependencies / module requires.
     
     all 'Base' modifiers are first added to the Base FOV, then the Base FOV is 
     multiplied by each existing 'Multipliers' modifiers.
+
+    ( HOW TO USE )
+    -> Set your default/base FOV by adding a "BaseFov" NumberValue child to
+       this script instance. (Or modify the constant default FOV below.)
+    -> For any script / scripted subsystems that wishes to change the FOV, have
+       them create a named NumberValue in FOVDaemon.Base (for add/subtract)
+       or in FOVDaemon.Multipliers (for multiplication). Instead of updating
+       Camera.FieldOfView per frame on those scripts, regularly update the 
+       mentioned NumberValues instead.
+    -> Cleaning up modifiers is as easy as deleting the NumberValues in
+       FOVDaemon.Base or FOVDaemon.Multipliers
+    -> TIP: Have modifier NumberValue names for guns be a common name, like
+       `WeaponRecoilFOVAdd`, or `WeaponZoomFOVMultiplier` 
 ]] 
 
 --[[
