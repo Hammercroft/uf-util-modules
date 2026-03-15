@@ -1,9 +1,10 @@
 # uf-util-modules
-A collection of ROBLOX ~~modules~~ scripts that I made, and could be useful for you.
+A collection of ROBLOX ~~modules~~ _scripts_ that I made, and could be useful for you.
 All modules have licenses embedded in all of them.
 
 - [BurstTransmission](https://github.com/Hammercroft/uf-util-modules/blob/main/BurstTransmission.lua) : Utility for sending timed, high-frequency event bursts over `UnreliableRemoteEvent`
 - [M6DRotTransmission](https://github.com/Hammercroft/uf-util-modules/blob/main/M6DRotTransmission.lua) : Utility for efficiently transmitting Motor6D rotation updates from client to server.
+- [FOVDaemon](https://github.com/Hammercroft/uf-util-modules/blob/main/FOVDaemon.lua) : Camera FOV Controller, uses 4:3 Horizontal FOV values (Quake, GoldSrc, and Source Engine FOV Values), + Dynamic Modifier System that uses NumberValue instances as inputs.
 
 ## 💬 Found a bug or have an idea?
 Open an issue! Include steps to reproduce (if it's a bug), or just explain your suggestion clearly.
