@@ -144,12 +144,12 @@ local function update()
 
 	-- for each add modifier
 	for _, inst in addModifiersFolder:GetChildren() do
-		if not inst:IsA("NumberValue") then return end
+		if not inst:IsA("NumberValue") then continue end
 		camera.FieldOfView += inst.Value
 	end
 	-- for each multiply modifier
 	for _, inst in multiplyModifiersFolder:GetChildren() do
-		if not inst:IsA("NumberValue") then return end
+		if not inst:IsA("NumberValue") then continue end
 		camera.FieldOfView *= inst.Value
 	end
 end
