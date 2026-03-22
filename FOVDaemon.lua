@@ -1,6 +1,6 @@
 --!strict
 
--- FOVDaemon (St0rmCast3r / Hammercroft)
+-- FOVDaemon (St0rmCast3r)
 
 -- !!! !!! !!! NOTE: DROP IN StarterPlayerScripts !!! !!! !!!
 
@@ -8,7 +8,8 @@
     ( PURPOSE )
     -> Allow the base field of view to be set via a number value instance
     -> For converting 4:3 HFOV values to Roblox's VFOV
-    -> For applying dynamic FOV modifiers via number value instances
+    -> For applying dynamic FOV modifiers via number value instances,
+       in lieu of having FOV modifying-scripts fighting over each other
     -> Do all of these without critical dependencies / module requires.
     
     all 'Base' modifiers are first added to the Base FOV, then the Base FOV is 
@@ -53,7 +54,7 @@
 ]]
 
 -- default 4:3 horizontal field of view, degrees
-local DEFAULT_43_HFOV = 90 
+local DEFAULT_43_HFOV = 90
 
 -- Some 4:3 HFOV values that you might like:
 -- Call of Duty 4: Modern Warfare (2007) = 65
@@ -74,65 +75,82 @@ addModifiersFolder.Parent = script
 local multiplyModifiersFolder = script:FindFirstChild("Multipliers") or Instance.new("Folder")
 multiplyModifiersFolder.Name = "Multipliers"
 multiplyModifiersFolder.Parent = script
-local baseFovNumberValue = script:WaitForChild("BaseFov", 1) :: NumberValue
+-- Quake Value FOV input
+local baseFovNumberValue = script:WaitForChild("BaseFOV", 1) :: NumberValue
 if not baseFovNumberValue or baseFovNumberValue.Value == nil then
-    baseFovNumberValue = Instance.new("NumberValue")
-    baseFovNumberValue.Name = "BaseFov"
-    baseFovNumberValue.Value = DEFAULT_43_HFOV
-    baseFovNumberValue.Parent = script
+	baseFovNumberValue = Instance.new("NumberValue")
+	baseFovNumberValue.Name = "BaseFOV"
+	baseFovNumberValue.Value = DEFAULT_43_HFOV
+	baseFovNumberValue.Parent = script
 end
 assert(baseFovNumberValue)
-    
+-- calculated VFOV from BaseFOV / reflection of AppliedPreModifierFOV
+local baseFovCalculatedNumberValue = script:WaitForChild("BaseFOVCalculated", 1) :: NumberValue
+if not baseFovCalculatedNumberValue or baseFovCalculatedNumberValue.Value == nil then
+	baseFovCalculatedNumberValue = Instance.new("NumberValue")
+	baseFovCalculatedNumberValue.Name = "BaseFOVCalculated"
+	baseFovCalculatedNumberValue.Value = 0 -- to be set later
+	baseFovCalculatedNumberValue.Parent = script
+end
+
 -- Base FOV value & caching
 local currentBaseHFOV = baseFovNumberValue.Value
 function updateBaseFOV()
-    currentBaseHFOV = baseFovNumberValue.Value
+	currentBaseHFOV = baseFovNumberValue.Value
 end
 baseFovNumberValue:GetPropertyChangedSignal("Value"):Connect(updateBaseFOV)
-    
+
 -- other fields
 local appliedPreModifierFov = 0
-    
+
 -- convert 4:3 hfov to vfov, degrees
 @native
 function convertHFovToVFov(viewport_size : Vector2, h_fov : number)
-    local currentAspectRatio = (viewport_size.X + 1e-8) / (viewport_size.Y + 1e-8)
-    local baseAspectRatio = 1.33333337306976318359375
-    local calcRatio = math.min(currentAspectRatio, baseAspectRatio)
-    
-    -- VFOVrad  = 2 * atan(tan(HFOVrad / 2) / AspectRatio)
-    local hFovRad = math.rad(h_fov)
-    local vFovRad = 2 * math.atan(math.tan((hFovRad + 1e-8) / 2) / calcRatio)
-    
-    return math.deg(vFovRad)
+	local currentAspectRatio = (viewport_size.X + 1e-8) / (viewport_size.Y + 1e-8)
+	local baseAspectRatio = 1.33333337306976318359375
+	local calcRatio = math.min(currentAspectRatio, baseAspectRatio)
+
+	-- VFOVrad  = 2 * atan(tan(HFOVrad / 2) / AspectRatio)
+	local hFovRad = math.rad(h_fov)
+	local vFovRad = 2 * math.atan(math.tan((hFovRad + 1e-8) / 2) / calcRatio)
+
+	return math.deg(vFovRad)
 end
-    
+
 repeat wait() until workspace.CurrentCamera ~= nil
 assert(workspace.CurrentCamera)
 local camera : Camera = workspace.CurrentCamera
-    
+
 camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-    local viewport_size = camera.ViewportSize
-    local vFov = convertHFovToVFov(viewport_size, currentBaseHFOV)
-    appliedPreModifierFov = vFov 
-end)    
-    
+	local viewport_size = camera.ViewportSize
+	local vFov = convertHFovToVFov(viewport_size, currentBaseHFOV)
+	baseFovCalculatedNumberValue.Value = vFov
+	appliedPreModifierFov = vFov 
+	print(appliedPreModifierFov)
+end)
+baseFovNumberValue.Changed:Connect(function()
+	local viewport_size = camera.ViewportSize
+	local vFov = convertHFovToVFov(viewport_size, currentBaseHFOV)
+	baseFovCalculatedNumberValue.Value = vFov
+	appliedPreModifierFov = vFov 
+end)
+appliedPreModifierFov = convertHFovToVFov(camera.ViewportSize, currentBaseHFOV)
+baseFovCalculatedNumberValue.Value = convertHFovToVFov(camera.ViewportSize, currentBaseHFOV) --TODO DRY
+
 local runSvc = game:GetService("RunService")
 local function update()
-    assert(camera)
-    camera.FieldOfView = appliedPreModifierFov
-    
-    -- for each add modifier
-    for _, inst in addModifiersFolder:GetChildren() do
-        if not inst:IsA("NumberValue") then return end
-        camera.FieldOfView += inst.Value
-    end
-    -- for each multiply modifier
-    for _, inst in multiplyModifiersFolder:GetChildren() do
-        if not inst:IsA("NumberValue") then return end
-        camera.FieldOfView *= inst.Value
-    end
+	assert(camera)
+	camera.FieldOfView = appliedPreModifierFov
+
+	-- for each add modifier
+	for _, inst in addModifiersFolder:GetChildren() do
+		if not inst:IsA("NumberValue") then return end
+		camera.FieldOfView += inst.Value
+	end
+	-- for each multiply modifier
+	for _, inst in multiplyModifiersFolder:GetChildren() do
+		if not inst:IsA("NumberValue") then return end
+		camera.FieldOfView *= inst.Value
+	end
 end
 runSvc.RenderStepped:Connect(update)
-                    
-                    
