@@ -15,12 +15,15 @@ LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OT
 ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ]]
 
--- FastAnimate
+-- LiteAnimate
 
--- Simplified vanilla-style R6 animator: idle / walk / run / tool anims only.
--- No emotes, no Humanoid state event hooks, no Value-instance animation configs.
--- Pose is inferred from horizontal displacement sampling (works as Script or
+-- A simplified replacement for R6 Character Animate scripts.
+-- Especially useful for animating server-owned characters in the client side.
+
+-- Small anim set; idle / walk / run / tool anims only.
 -- Made to be executed as a Script, either Client or Server RunContext.
+-- No emotes, no Humanoid state event hooks, no Value-instance animation configs.
+-- Pose is inferred from horizontal displacement sampling over time.
 
 local RunService = game:GetService("RunService")
 
