@@ -25,6 +25,15 @@ ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 -- No emotes, no Humanoid state event hooks, no Value-instance animation configs.
 -- Pose is inferred from horizontal displacement sampling over time.
 
+-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+-- NOTE: THIS SCRIPT INTRODUCES PART POSITION DESYNC WHEN EXECUTED CLIENT-SIDE ON A SERVER-OWNED CHARACTER!
+-- This detail is especially important to note when your game has some form of hit verification.
+-- Character part positions between the server and the client may not match (especially the arms and legs if
+-- using the default R6 animations). This can be addressed by being lenient with validation margins.
+
+-- !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 local RunService = game:GetService("RunService")
 
 local Figure = script.Parent
@@ -50,7 +59,7 @@ local SPEED_SMOOTHING_ALPHA = 0.35    -- EMA factor; lower = smoother/slower to 
 local BODY_ANIM_TRANSITION_TIME = 0.1
 local TOOL_ANIM_TRANSITION_TIME = 0.1
 local TOOL_ANIM_HOLD_TIME = 0.3       -- how long a Slash/Lunge signal stays "active"
-local SAMPLE_INTERVAL = 1 / 30        -- displacement sampling rate, in seconds
+local SAMPLE_INTERVAL = 1 / 50        -- displacement sampling rate, in seconds
 
 local ANIM_SET_CONFIG = {
 	idle = {
@@ -58,10 +67,10 @@ local ANIM_SET_CONFIG = {
 		{ id = 180435792, weight = 1 },
 	},
 	walk = {
-		{ id = 116435573388269, weight = 10 },
+		{ id = 180426354, weight = 10 },
 	},
 	run = {
-		{ id = 116435573388269, weight = 10 },
+		{ id = 180426354, weight = 10 },
 	},
 	toolNone = {
 		{ id = 182393478, weight = 10 },
@@ -113,6 +122,8 @@ end
 local animBodyNameCurrent = ""
 local animBodyTrackCurrent = nil
 
+local animBodySpeedReferenceCurrent = 1
+
 local function playBodyAnimation(anim_name, transition_time)
 	if anim_name == animBodyNameCurrent then
 		return
@@ -123,13 +134,14 @@ local function playBodyAnimation(anim_name, transition_time)
 	animBodyTrackCurrent = pickTrackFromSet(animSetsByName[anim_name])
 	animBodyTrackCurrent:Play(transition_time)
 	animBodyNameCurrent = anim_name
+	animBodySpeedReferenceCurrent = (anim_name == "walk" and WALK_SPEED_REFERENCE)
+		or (anim_name == "run" and RUN_SPEED_REFERENCE)
+		or 1
 end
 
 local function updateBodyAnimationSpeed(speed_value)
-	if animBodyNameCurrent == "walk" then
-		animBodyTrackCurrent:AdjustSpeed(speed_value / WALK_SPEED_REFERENCE)
-	elseif animBodyNameCurrent == "run" then
-		animBodyTrackCurrent:AdjustSpeed(speed_value / RUN_SPEED_REFERENCE)
+	if animBodyNameCurrent == "walk" or animBodyNameCurrent == "run" then
+		animBodyTrackCurrent:AdjustSpeed(speed_value / animBodySpeedReferenceCurrent)
 	end
 end
 
@@ -162,12 +174,7 @@ local function stopToolAnimation()
 end
 
 local function getEquippedTool()
-	for _, child in ipairs(Figure:GetChildren()) do
-		if child:IsA("Tool") then
-			return child
-		end
-	end
-	return nil
+	return Figure:FindFirstChildOfClass("Tool")
 end
 
 -- Tools signal Slash/Lunge by dropping a StringValue named "toolanim" under
@@ -220,7 +227,8 @@ local function samplePoseFromDisplacement(delta_time)
 	positionSamplePrevious = positionCurrent
 
 	-- horizontal-only, so falling/jumping doesn't get misread as running
-	local speedSampled = Vector3.new(displacement.X, 0, displacement.Z).Magnitude / delta_time
+	--local speedSampled = Vector3.new(displacement.X, 0, displacement.Z).Magnitude / delta_time
+	local speedSampled = math.sqrt(displacement.X * displacement.X + displacement.Z * displacement.Z) / delta_time
 
 	-- light exponential smoothing to reject residual physics jitter
 	speedSampledSmoothed += (speedSampled - speedSampledSmoothed) * SPEED_SMOOTHING_ALPHA
@@ -251,7 +259,7 @@ RunService.Heartbeat:Connect(function(deltaTime)
 	sampleTimeAccumulated += deltaTime
 	if sampleTimeAccumulated >= SAMPLE_INTERVAL then
 		samplePoseFromDisplacement(sampleTimeAccumulated)
+		sampleToolState(os.clock())
 		sampleTimeAccumulated = 0
 	end
-	sampleToolState(os.clock())
 end)
