@@ -1,11 +1,12 @@
 # uf-util-modules
-A collection of ROBLOX ~~modules~~ _scripts_ that I made, and could be useful for you.
+A collection of self-made and self-contained scripts and utility modules that I made in ROBLOX. These scripts I deem to be of high quality. If they might be of use to you, please do.
 All modules have licenses embedded in all of them.
 
-- [BurstTransmission](https://github.com/Hammercroft/uf-util-modules/blob/main/BurstTransmission.lua) : Utility for sending timed, high-frequency event bursts over `UnreliableRemoteEvent`
+- [BurstTransmission](https://github.com/Hammercroft/uf-util-modules/blob/main/BurstTransmission.lua) : Utility module for sending timed, high-frequency event bursts over `UnreliableRemoteEvent`
 - [M6DRotTransmission](https://github.com/Hammercroft/uf-util-modules/blob/main/M6DRotTransmission.lua) : Utility for efficiently transmitting Motor6D rotation updates from client to server.
 - [FOVDaemon](https://github.com/Hammercroft/uf-util-modules/blob/main/FOVDaemon.lua) : Camera FOV Controller (operating on 4:3 HFOV / Quake FOV values), plus a Dynamic Modifier System that uses `NumberValue` instances as inputs.
 - [LiteAnimate](https://github.com/Hammercroft/uf-util-modules/blob/main/LiteAnimate.lua) : A minimalistic replacement for the R6 `Animate` script; _Especially useful for animating server-owned characters via the client_.
+- [GameAI TickScheduler](https://github.com/Hammercroft/uf-util-modules/blob/main/GameAI_TickScheduler.lua) : Cooperative fixed-rate scheduler for large-scale NPC/AI systems that spreads updates evenly across frames.
 
 ## 💬 Found a bug or have an idea?
 Open an issue! Include steps to reproduce (if it's a bug), or just explain your suggestion clearly.
